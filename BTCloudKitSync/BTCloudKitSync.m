@@ -120,7 +120,7 @@
 		if (success == NO) {
 			NSLog(@"Could not configure BTCloudKitSync: %@", error ? error : @"Unknown error");
 		} else {
-			_isConfigured = YES;
+			self->_isConfigured = YES;
 		}
 	}];
 }
@@ -143,14 +143,14 @@
 			return;
 		}
 		
-		if (enableSync && _currentCloudKitStatus != CKAccountStatusAvailable) {
+		if (enableSync && self->_currentCloudKitStatus != CKAccountStatusAvailable) {
 			dispatch_async(dispatch_get_main_queue(), ^{
 				// User is attempting to enable sync when there is no CloudKit account
-				if (_currentCloudKitStatus == CKAccountStatusNoAccount) {
+				if (self->_currentCloudKitStatus == CKAccountStatusNoAccount) {
 					completion(NO, [NSError errorWithDomain:BTCloudKitSyncErrorDomain code:-1 userInfo:@{NSLocalizedDescriptionKey:@"No iCloud account is logged in on this device."}]);
-				} else if (_currentCloudKitStatus == CKAccountStatusRestricted) {
+				} else if (self->_currentCloudKitStatus == CKAccountStatusRestricted) {
 					completion(NO, [NSError errorWithDomain:BTCloudKitSyncErrorDomain code:-1 userInfo:@{NSLocalizedDescriptionKey:@"Parental Controls / Device Management has denied access to iCloud account credentials."}]);
-				} else if (_currentCloudKitStatus == CKAccountStatusCouldNotDetermine) {
+				} else if (self->_currentCloudKitStatus == CKAccountStatusCouldNotDetermine) {
 					completion(NO, [NSError errorWithDomain:BTCloudKitSyncErrorDomain code:-1 userInfo:@{NSLocalizedDescriptionKey:@"Could not determine the status of the device's iCloud account."}]);
 				}
 			});
@@ -175,10 +175,10 @@
 			CKFetchSubscriptionsOperation *fetchSubOp = [CKFetchSubscriptionsOperation fetchAllSubscriptionsOperation];
 			CKModifySubscriptionsOperation *modifySubsOp = [[CKModifySubscriptionsOperation alloc] init];
 			
-			fetchRecordZonesOp.database = _privateDB;
-			modifyRecordZonesOp.database = _privateDB;
-			fetchSubOp.database = _privateDB;
-			modifySubsOp.database = _privateDB;
+			fetchRecordZonesOp.database = self->_privateDB;
+			modifyRecordZonesOp.database = self->_privateDB;
+			fetchSubOp.database = self->_privateDB;
+			modifySubsOp.database = self->_privateDB;
 			
 			[modifyRecordZonesOp addDependency:fetchRecordZonesOp];
 			[fetchSubOp addDependency:fetchRecordZonesOp];
@@ -187,7 +187,7 @@
 			
 			//	1.	Set up the CKRecordZone(s)
 			__block BOOL hasCreatedRecordZone = NO;
-			NSString *recordZoneName = [_localDatabase recordZoneName];
+			NSString *recordZoneName = [self->_localDatabase recordZoneName];
 			CKRecordZoneID *zoneID = [[CKRecordZoneID alloc] initWithZoneName:recordZoneName ownerName:CKOwnerDefaultName];
 			fetchRecordZonesOp.fetchRecordZonesCompletionBlock = ^(NSDictionary <CKRecordZoneID *, CKRecordZone *> *recordZonesByZoneID, NSError *operationError) {
 				if (fetchRecordZonesOp.isCancelled == NO) {
@@ -295,9 +295,9 @@
 			
 			//	4.	Tell the local database to track local changes
 			__block BOOL shouldReturn = NO;
-			[[_localDatabase recordTypes] enumerateObjectsUsingBlock:^(NSString * _Nonnull recordType, NSUInteger idx, BOOL * _Nonnull stop) {
+			[[self->_localDatabase recordTypes] enumerateObjectsUsingBlock:^(NSString * _Nonnull recordType, NSUInteger idx, BOOL * _Nonnull stop) {
 				NSError *localDBError = nil;
-				if ([_localDatabase configureChangeTrackingForRecordType:recordType error:&localDBError] == NO) {
+				if ([self->_localDatabase configureChangeTrackingForRecordType:recordType error:&localDBError] == NO) {
 					NSError *error = [NSError errorWithDomain:BTCloudKitSyncErrorDomain
 														 code:BTCloudKitSyncErrorConfigureChangeTracking
 													 userInfo:@{NSLocalizedDescriptionKey:@"Could not configure change tracking in the local database.",
@@ -334,9 +334,9 @@
 			
 			//	2.	Purge local changes
 			__block BOOL shouldReturn = NO;
-			[[_localDatabase recordTypes] enumerateObjectsUsingBlock:^(NSString * _Nonnull recordType, NSUInteger idx, BOOL * _Nonnull stop) {
+			[[self->_localDatabase recordTypes] enumerateObjectsUsingBlock:^(NSString * _Nonnull recordType, NSUInteger idx, BOOL * _Nonnull stop) {
 				NSError *dbError = nil;
-				if ([_localDatabase purgeRecordChangesOfType:recordType beforeDate:[NSDate date] error:&dbError] == NO) {
+				if ([self->_localDatabase purgeRecordChangesOfType:recordType beforeDate:[NSDate date] error:&dbError] == NO) {
 					NSError *error = [NSError errorWithDomain:BTCloudKitSyncErrorDomain
 														 code:BTCloudKitSyncErrorPurgeChanges
 													 userInfo:@{NSLocalizedDescriptionKey:@"Could not purge record changes from the database.",
@@ -356,7 +356,7 @@
 			
 			//	3.	Delete CKRecord system fields
 			NSError *dbError = nil;
-			if ([_localDatabase purgeAllSystemFieldsWithError:&dbError] == NO) {
+			if ([self->_localDatabase purgeAllSystemFieldsWithError:&dbError] == NO) {
 				NSError *error = [NSError errorWithDomain:BTCloudKitSyncErrorDomain
 													 code:BTCloudKitSyncErrorPurgeSystemFields
 												 userInfo:@{NSLocalizedDescriptionKey:@"Could not purge CKRecord system fields from the database.",
@@ -424,24 +424,24 @@
 		
 		// If there is currently a fetch records operation occurring, wait until
 		// it is finished before continuing.
-		if (_isCurrentlyFetching) {
-			[_fetchQueue waitUntilAllOperationsAreFinished];
+		if (self->_isCurrentlyFetching) {
+			[self->_fetchQueue waitUntilAllOperationsAreFinished];
 		}
 		
 		// For now, each record type will be synchronized individually to make
 		// it easier to control limits/etc.
 		__block BOOL modifyRecordsSucceeded = YES;
-		NSArray<NSString *> *recordTypes = [_localDatabase recordTypes];
+        NSArray<NSString *> *recordTypes = [self->_localDatabase recordTypes];
 		if (recordTypes && recordTypes.count > 0) {
 			[recordTypes enumerateObjectsUsingBlock:^(NSString * _Nonnull recordType, NSUInteger idx, BOOL * _Nonnull stop) {
 				
-				_currentRecordType = recordType;
+				self->_currentRecordType = recordType;
 				
-				_currentBatchSizeToSend = _maxLocalChangesToSend;
-				_currentSyncDates[recordType] = _currentSyncDate;
+				self->_currentBatchSizeToSend = self->_maxLocalChangesToSend;
+				self->_currentSyncDates[recordType] = self->_currentSyncDate;
 				
 				NSError *dbError = nil;
-				NSArray<NSDictionary *> *recordsA = [_localDatabase recordChangesOfType:recordType beforeDate:_currentSyncDate limit:_currentBatchSizeToSend error:&dbError];
+                NSArray<NSDictionary *> *recordsA = [self->_localDatabase recordChangesOfType:recordType beforeDate:self->_currentSyncDate limit:self->_currentBatchSizeToSend error:&dbError];
 				if (recordsA && recordsA.count > 0) {
 					[self _modifyRecords:recordsA ofRecordType:recordType completionHandler:^(BOOL success) {
 						NSLog(@"Modify records for record type (%@): %@", recordType, success ? @"succeeded" : @"failed");
@@ -455,7 +455,7 @@
 					// don't want to complicate things by allowing the fetch changes
 					// operation (below) to run, so go ahead and wait until all
 					// modify operations are completed first before continuing.
-					[_syncQueue waitUntilAllOperationsAreFinished];
+					[self->_syncQueue waitUntilAllOperationsAreFinished];
 				}
 			}];
 		}
@@ -472,10 +472,10 @@
 				// TO-DO: Figure out if there's a better way to handle wrapping up fetchChanges local notification kicking off a sync
 				dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
 					@synchronized (self) {
-						_currentSyncDate = nil;
-						_currentRecordType = nil;
-						_currentBatchSizeToSend = 0;
-						[_currentSyncDates removeAllObjects];
+						self->_currentSyncDate = nil;
+						self->_currentRecordType = nil;
+						self->_currentBatchSizeToSend = 0;
+						[self->_currentSyncDates removeAllObjects];
 					}
 					
 					NSDate *syncDate = [NSDate date];
@@ -487,10 +487,10 @@
 			}];
 		} else {
 			@synchronized (self) {
-				_currentSyncDate = nil;
-				_currentRecordType = nil;
-				_currentBatchSizeToSend = 0;
-				[_currentSyncDates removeAllObjects];
+                self->_currentSyncDate = nil;
+                self->_currentRecordType = nil;
+                self->_currentBatchSizeToSend = 0;
+                [self->_currentSyncDates removeAllObjects];
 			}
 			
 			dispatch_async(dispatch_get_main_queue(), ^{
@@ -782,9 +782,9 @@
 	// It's possible that a CKModifyRecordsOperation is currently running. If
 	// so, wait until it's done before continuing.
 	dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
-		if (_currentSyncDate) {
+        if (self->_currentSyncDate) {
 //NSLog(@"\n--------------------------\n--------------------------\n    FETCH WAITING FOR MODIFY TO FINISH\n--------------------------\n--------------------------");
-			[_syncQueue waitUntilAllOperationsAreFinished];
+            [self->_syncQueue waitUntilAllOperationsAreFinished];
 //NSLog(@"\n--------------------------\n--------------------------\n    MODIFY FINISHED\n--------------------------\n--------------------------");
 		}
 		
@@ -906,7 +906,7 @@
 	// Check CloudKit account status even if sync is not enabled.
 	CKContainer *container = [CKContainer defaultContainer];
 	[container accountStatusWithCompletionHandler:^(CKAccountStatus accountStatus, NSError * _Nullable error) {
-		_currentCloudKitStatus = accountStatus;
+        self->_currentCloudKitStatus = accountStatus;
 		if (accountStatus != CKAccountStatusAvailable) {
 			[self enableSync:NO withCompletionBlock:^(BOOL success, NSError *error) {
 				if (success) {
@@ -919,7 +919,7 @@
 				completionHandler(NO, error ? error : [NSError errorWithDomain:BTCloudKitSyncErrorDomain code:-1 userInfo:@{NSLocalizedDescriptionKey:@"A CloudKit account is not available"}]);
 			});
 		} else {
-			_privateDB = container.privateCloudDatabase;
+            self->_privateDB = container.privateCloudDatabase;
 			
 			// During launch of the app, we need to make sure that we have everything
 			// set up to sync if sync is enabled.
@@ -1037,7 +1037,7 @@
 			CKRecord *ckRecord = nil;
 			CKRecordID *ckRecordID = nil;
 			
-			NSData *systemFields = [_localDatabase systemFieldsDataForRecordWithIdentifier:recordIdentifier error:nil];
+            NSData *systemFields = [self->_localDatabase systemFieldsDataForRecordWithIdentifier:recordIdentifier error:nil];
 			if (systemFields) {
 				NSKeyedUnarchiver *archiver = [[NSKeyedUnarchiver alloc] initForReadingWithData:systemFields];
 				archiver.requiresSecureCoding = YES;
@@ -1058,7 +1058,7 @@
 				} else {
 					// Let's purge the changes from the local database so we
 					// don't try to send this again.
-					[_localDatabase purgeRecordChangeOfRecordType:recordType withIdentifier:recordIdentifier beforeDate:_currentSyncDates[recordType] error:nil];
+                    [self->_localDatabase purgeRecordChangeOfRecordType:recordType withIdentifier:recordIdentifier beforeDate:self->_currentSyncDates[recordType] error:nil];
 				}
 				
 				dispatch_async(dispatch_get_main_queue(), ^{
@@ -1129,14 +1129,14 @@
 						NSString *identifier = savedRecord.recordID.recordName;
 						if (identifier) {
 							NSError *dbError = nil;
-							if ([_localDatabase saveSystemFieldsData:archivedData withIdentifier:identifier error:&dbError] == NO) {
+                            if ([self->_localDatabase saveSystemFieldsData:archivedData withIdentifier:identifier error:&dbError] == NO) {
 								// TO-DO: Figure out what to do about this error (shouldn't ever happen)
 								NSLog(@"Unable to save archived system fields: %@", dbError);
 							}
 						}
 						
 						NSError *purgeError = nil;
-						[_localDatabase purgeRecordChangeOfRecordType:recordType withIdentifier:identifier beforeDate:_currentSyncDates[recordType] error:&purgeError];
+                        [self->_localDatabase purgeRecordChangeOfRecordType:recordType withIdentifier:identifier beforeDate:self->_currentSyncDates[recordType] error:&purgeError];
 						if (purgeError) {
 							NSLog(@"Error purging record change for modified record with identifier: %@", identifier);
 						}
@@ -1157,13 +1157,13 @@
 						NSString *identifier = recordID.recordName;
 						if (identifier) {
 							NSError *dbError = nil;
-							if ([_localDatabase deleteSystemFieldsForRecordWithIdentifier:identifier error:&dbError] == NO) {
+                            if ([self->_localDatabase deleteSystemFieldsForRecordWithIdentifier:identifier error:&dbError] == NO) {
 								NSLog(@"Unable to delete the archived system fields for record id (%@): %@", identifier, dbError);
 							}
 						}
 						
 						NSError *purgeError = nil;
-						[_localDatabase purgeRecordChangeOfRecordType:recordType withIdentifier:identifier beforeDate:_currentSyncDates[recordType] error:&purgeError];
+                        [self->_localDatabase purgeRecordChangeOfRecordType:recordType withIdentifier:identifier beforeDate:self->_currentSyncDates[recordType] error:&purgeError];
 						if (purgeError) {
 							NSLog(@"Error purging record change for deleted record with identifier: %@", identifier);
 						}
@@ -1185,17 +1185,17 @@
 				
 				// This is a new sync for this particular record type, so reset
 				// the current sync date for this record type.
-				_currentSyncDates[recordType] = [NSDate date];
+                self->_currentSyncDates[recordType] = [NSDate date];
 				
 				// Also reset the batch size so in case the previous sync had to
 				// reduce the size for whatever reason, we won't punish this
 				// modify records operation.
-				_currentBatchSizeToSend = _maxLocalChangesToSend;
+                self->_currentBatchSizeToSend = self->_maxLocalChangesToSend;
 				
 				NSError *dbError = nil;
-				NSArray<NSDictionary *> *recordsA = [_localDatabase recordChangesOfType:_currentRecordType
-																			 beforeDate:_currentSyncDates[recordType]
-																				  limit:_currentBatchSizeToSend
+                NSArray<NSDictionary *> *recordsA = [self->_localDatabase recordChangesOfType:self->_currentRecordType
+                                                                             beforeDate:self->_currentSyncDates[recordType]
+                                                                                  limit:self->_currentBatchSizeToSend
 																				  error:&dbError];
 				if (dbError) {
 					NSLog(@"Error getting local database changes when checking for any user-based changes at the end of a modify records operation: %@", dbError);
@@ -1205,7 +1205,7 @@
 						completionHandler(YES);
 					} else {
 						[self _modifyRecords:recordsA
-								ofRecordType:_currentRecordType
+                                ofRecordType:self->_currentRecordType
 						   completionHandler:completionHandler];
 					}
 				}
@@ -1283,9 +1283,9 @@
 												// in any subsequent modify operation
 												// since we just dealt with getting it
 												// in sync with the server.
-												[_localDatabase purgeRecordChangeOfRecordType:recordType
+                                                [self->_localDatabase purgeRecordChangeOfRecordType:recordType
 																			   withIdentifier:recordID.recordName
-																				   beforeDate:_currentSyncDates[recordType]
+                                                                                   beforeDate:self->_currentSyncDates[recordType]
 																						error:nil];
 											}
 										}
@@ -1347,14 +1347,14 @@
 						
 						// According to the WWDC 2015 CloudKit Tips & Tricks
 						// session, the batch size should just be cut in half.
-						if (_currentBatchSizeToSend == 0) {
+                        if (self->_currentBatchSizeToSend == 0) {
 							// We never set a batch size, so grab the actual
 							// number of records we attempted to send and set
 							// _currentBatchSizeToSend to half that.
 							NSUInteger currentBatchSize = recordsToSaveA.count + recordsToDeleteA.count;
-							_currentBatchSizeToSend = (NSUInteger)ceil(currentBatchSize / 2);
+                            self->_currentBatchSizeToSend = (NSUInteger)ceil(currentBatchSize / 2);
 						} else {
-							_currentBatchSizeToSend = (NSUInteger)ceil(_currentBatchSizeToSend / 2);
+                            self->_currentBatchSizeToSend = (NSUInteger)ceil(self->_currentBatchSizeToSend / 2);
 						}
 //NSLog(@"\n++++ CKErrorLimitExceeded ++++\n    New Batch Size: %lu\n++++++++++++++++++++++++++++++", _currentBatchSizeToSend);
 						shouldRetryModifyRecords = YES;
@@ -1372,9 +1372,9 @@
 				if (shouldRetryModifyRecords) {
 					
 					NSError *dbError = nil;
-					NSArray<NSDictionary *> *recordsA = [_localDatabase recordChangesOfType:_currentRecordType
-																				 beforeDate:_currentSyncDates[recordType]
-																					  limit:_currentBatchSizeToSend
+                    NSArray<NSDictionary *> *recordsA = [self->_localDatabase recordChangesOfType:self->_currentRecordType
+                                                                                 beforeDate:self->_currentSyncDates[recordType]
+                                                                                      limit:self->_currentBatchSizeToSend
 																					  error:&dbError];
 					if (dbError) {
 						NSLog(@"Error getting local database changes when retrying modify records operation: %@", dbError);
@@ -1385,7 +1385,7 @@
 						} else {
 //NSLog(@"\n++++ Retrying Modify ++++");
 							[self _modifyRecords:recordsA
-									ofRecordType:_currentRecordType
+                                    ofRecordType:self->_currentRecordType
 							   completionHandler:completionHandler];
 						}
 					}
@@ -1437,10 +1437,9 @@
 					case CKErrorRequestRateLimited:
 					case CKErrorServiceUnavailable:
 					{
-						NSNumber *secondsUntilRetry = operationError.userInfo[CKErrorRetryAfterKey];
 						// TO-DO: Determine how to restart a _fetchRecordChangesWithServerChangeToken: after the specified number of seconds
 						@synchronized (self) {
-							_isCurrentlyFetching = NO;
+                            self->_isCurrentlyFetching = NO;
 						}
 						completionHandler(BTFetchResultNoData, NO);
 						
@@ -1461,7 +1460,7 @@
 				[self _saveServerChangeToken:newServerChangeToken];
 				if (completionHandler) {
 					@synchronized (self) {
-						_isCurrentlyFetching = NO;
+                        self->_isCurrentlyFetching = NO;
 					}
 					completionHandler(BTFetchResultNoData, NO);
 				}
@@ -1482,7 +1481,7 @@
 												 completionHandler:completionHandler];
 				} else {
 					@synchronized (self) {
-						_isCurrentlyFetching = NO;
+                        self->_isCurrentlyFetching = NO;
 					}
 					if (completionHandler) {
 						completionHandler(BTFetchResultNoData, NO);
@@ -1500,7 +1499,7 @@
 		// First check to see if the local record already matches and if
 		// it does, do nothing.
 		NSString *identifier = record.recordID.recordName;
-		NSData *systemFields = [_localDatabase systemFieldsDataForRecordWithIdentifier:identifier error:nil];
+        NSData *systemFields = [self->_localDatabase systemFieldsDataForRecordWithIdentifier:identifier error:nil];
 		if (systemFields) {
 			NSKeyedUnarchiver *archiver = [[NSKeyedUnarchiver alloc] initForReadingWithData:systemFields];
 			archiver.requiresSecureCoding = YES;
@@ -1525,7 +1524,7 @@
 		// exist and they are newer, just save the system fields so that when
 		// the modify records runs, the local changes will be pushed to CloudKit.
 		NSDate *now = [NSDate date];
-		NSDictionary *changes = [_localDatabase recordChangeOfType:record.recordType
+        NSDictionary *changes = [self->_localDatabase recordChangeOfType:record.recordType
 													withIdentifier:identifier
 														beforeDate:now
 															 error:nil];
@@ -1560,7 +1559,7 @@
 				// queue, perhaps we should discard the local changes (server wins)
 				if (changes) {
 //NSLog(@"\n==== DISCARDING unsynced local changes ====\n%@\n=========================", record);
-					[_localDatabase purgeRecordChangeOfRecordType:record.recordType
+                    [self->_localDatabase purgeRecordChangeOfRecordType:record.recordType
 												   withIdentifier:identifier
 													   beforeDate:now
 															error:nil];
@@ -1582,7 +1581,7 @@
 		// Determine the record type by referring to the previously-saved system
 		// fields. If this device has no system fields, assume that this device
 		// knows nothing of this deleted record.
-		NSData *systemFields = [_localDatabase systemFieldsDataForRecordWithIdentifier:recordID.recordName error:nil];
+        NSData *systemFields = [self->_localDatabase systemFieldsDataForRecordWithIdentifier:recordID.recordName error:nil];
 		NSString *recordType = nil;
 		if (systemFields) {
 			NSKeyedUnarchiver *archiver = [[NSKeyedUnarchiver alloc] initForReadingWithData:systemFields];
@@ -1598,7 +1597,7 @@
 																			 BTCloudKitSyncRecordIdentifierKey:recordID.recordName}];
 			});
 			
-			[_localDatabase deleteRecordWithIdentifier:recordID.recordName withRecordType:recordType error:&error];
+            [self->_localDatabase deleteRecordWithIdentifier:recordID.recordName withRecordType:recordType error:&error];
 			if (error) {
 				// If there was an error deleting, not sure what to do, but it
 				// may not be crucial.
@@ -1608,8 +1607,8 @@
 				// To purge any pending changes, we need to know the record type,
 				// which we should have in the system fields.
 				
-				[_localDatabase purgeRecordChangeOfRecordType:recordType withIdentifier:recordID.recordName beforeDate:[NSDate date] error:nil];
-				[_localDatabase deleteSystemFieldsForRecordWithIdentifier:recordID.recordName error:nil];
+                [self->_localDatabase purgeRecordChangeOfRecordType:recordType withIdentifier:recordID.recordName beforeDate:[NSDate date] error:nil];
+                [self->_localDatabase deleteSystemFieldsForRecordWithIdentifier:recordID.recordName error:nil];
 				
 				recordsWereDeleted = YES;
 				
